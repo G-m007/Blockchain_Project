@@ -1,0 +1,6 @@
+{
+  "outDir": "client/types/contracts",
+  "target": "ethers-v6",
+  "alwaysGenerateOverloads": true,
+  "files": ["artifacts/contracts/RealEstateBuy.sol/RealEstateBuy.json"]
+} 
