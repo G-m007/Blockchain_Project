@@ -10,6 +10,7 @@ import {
   MenuIcon,
   XIcon,
   BuildingIcon,
+  VoteIcon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -70,6 +71,15 @@ export default function Header() {
               <div className="flex items-center gap-1">
                 <ShoppingBagIcon size={18} />
                 <span>Marketplace</span>
+              </div>
+            </Link>
+            <Link
+              href="/vote"
+              className="font-medium hover:text-blue-400 transition-colors duration-200"
+            >
+              <div className="flex items-center gap-1">
+                <VoteIcon size={18} />
+                <span>Vote Rent</span>
               </div>
             </Link>
             <Link
@@ -151,6 +161,15 @@ export default function Header() {
               <div className="flex items-center gap-2">
                 <ShoppingBagIcon size={18} />
                 <span>Marketplace</span>
+              </div>
+            </Link>
+            <Link
+              href="/vote"
+              className="block font-medium hover:text-blue-400 py-2"
+            >
+              <div className="flex items-center gap-2">
+                <VoteIcon size={18} />
+                <span>Vote Rent</span>
               </div>
             </Link>
             <Link
