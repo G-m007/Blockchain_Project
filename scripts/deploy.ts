@@ -3,14 +3,29 @@ import { ethers } from "hardhat";
 async function main() {
   console.log("Deploying RealEstateBuy contract...");
 
-  // Deploy the contract
+  // Deploy the RealEstateBuy contract
   const RealEstateBuy = await ethers.getContractFactory("RealEstateBuy");
   const realEstateBuy = await RealEstateBuy.deploy();
   await realEstateBuy.waitForDeployment();
 
-  console.log(`RealEstateBuy deployed to: ${await realEstateBuy.getAddress()}`);
+  const realEstateBuyAddress = await realEstateBuy.getAddress();
+  console.log(`RealEstateBuy deployed to: ${realEstateBuyAddress}`);
 
-  // Sample properties to add
+  // Deploy the VoteContract
+  console.log("Deploying VoteContract...");
+  const VoteContract = await ethers.getContractFactory("VoteContract");
+  const voteContract = await VoteContract.deploy();
+  await voteContract.waitForDeployment();
+
+  const voteContractAddress = await voteContract.getAddress();
+  console.log(`VoteContract deployed to: ${voteContractAddress}`);
+
+  // Set the RealEstateBuy contract address in VoteContract
+  console.log("Connecting contracts...");
+  await voteContract.setRealEstateContract(realEstateBuyAddress);
+  console.log("Contracts connected successfully");
+
+  // Sample properties to add to RealEstateBuy
   const properties = [
     {
       name: "Luxury Beachfront Villa",
@@ -61,7 +76,7 @@ async function main() {
       totalCost: ethers.parseEther("6000"),
       totalNumberOfTokens: 1200,
       pricePerToken: ethers.parseEther("5"),
-      isRentable: false,
+      isRentable: true,
       monthlyRent: ethers.parseEther("0"),
     },
     {
@@ -79,11 +94,10 @@ async function main() {
     },
   ];
 
-  console.log("Adding properties to the contract...");
-
+  // Add properties to RealEstateBuy contract
+  console.log("Adding properties to RealEstateBuy contract...");
   for (let i = 0; i < properties.length; i++) {
     const property = properties[i];
-
     const tx = await realEstateBuy.createProperty(
       property.name,
       property.location,
@@ -95,17 +109,38 @@ async function main() {
       property.isRentable,
       property.monthlyRent
     );
-
     await tx.wait();
-    console.log(`Added property ${i + 1}: ${property.name}`);
+    console.log(`Added property ${i}: ${property.name}`);
   }
 
-  console.log("All properties have been added successfully!");
+  // Add properties to VoteContract and map them to RealEstateBuy properties
+  console.log("Adding properties to VoteContract and mapping...");
+  for (let i = 0; i < properties.length; i++) {
+    const property = properties[i];
+    if (property.isRentable) {
+      const tx = await voteContract[
+        "addProperty(string,string,uint256,uint256,uint256)"
+      ](
+        property.name,
+        property.location,
+        property.totalNumberOfTokens,
+        property.monthlyRent,
+        i // Map to the corresponding RealEstateBuy property ID
+      );
+      await tx.wait();
+      console.log(`Added and mapped property ${i}: ${property.name}`);
+    }
+  }
+
+  console.log("Deployment complete!");
+  console.log(`
+To update your constants file:
+- RealEstateBuy deployed to: ${realEstateBuyAddress}
+- VoteContract deployed to: ${voteContractAddress}
+  `);
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
