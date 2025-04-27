@@ -2,43 +2,72 @@
 
 import { useState, useEffect } from "react";
 import { useBlockchain } from "../../lib/useBlockchain";
+import { useVoteContract, RentApplication } from "@/lib/useVoteContract";
 import { Property } from "../../lib/useBlockchain";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "../../components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { formatEther } from "ethers";
+import { Badge } from "@/components/ui/badge";
 
 export default function RentPage() {
   const { properties, loading, error, isConnected, connectWallet, rentProperty } = useBlockchain();
+  const { loadApplications, account } = useVoteContract();
   const [renting, setRenting] = useState<number | null>(null);
   const [rentedProperties, setRentedProperties] = useState<{ [key: number]: boolean }>({});
+  const [approvedApplications, setApprovedApplications] = useState<{ [key: number]: boolean }>({});
 
-  // Check rented status for each property
+  // Check rented status and approved applications for each property
   useEffect(() => {
-    const checkRentedStatus = async () => {
+    const checkStatus = async () => {
       if (!isConnected) return;
 
       const rented: { [key: number]: boolean } = {};
+      const approved: { [key: number]: boolean } = {};
+
       for (const property of properties) {
         if (property.isRentable) {
           try {
-            // Filter out properties that are not rentable or not active
+            // Check if property is rented
             rented[property.propertyId] = !property.isActive;
+
+            // Check if user has approved applications
+            if (account) {
+              const applications = await loadApplications(property.propertyId);
+              const userApplication = applications.find(
+                (app: RentApplication) => app.applicant.toLowerCase() === account.toLowerCase() && app.isActive
+              );
+              approved[property.propertyId] = !!userApplication;
+            }
           } catch (error) {
-            console.error("Error checking rental status:", error);
+            console.error("Error checking status:", error);
           }
         }
       }
       setRentedProperties(rented);
+      setApprovedApplications(approved);
     };
 
-    checkRentedStatus();
-  }, [isConnected, properties]);
+    checkStatus();
+  }, [isConnected, properties, account, loadApplications]);
 
   // Filter properties that are available for rent and not already rented
   const availableProperties = properties.filter(
-    (property) => property.isRentable && property.isActive && !rentedProperties[property.propertyId]
+    (property) => 
+      property.isRentable && 
+      property.isActive && 
+      !rentedProperties[property.propertyId] &&
+      property.totalNumberOfTokens === 0 // Only show properties where all tokens are sold
+  );
+
+  // Filter properties that user has approved applications for
+  const approvedProperties = properties.filter(
+    (property) => 
+      property.isRentable && 
+      property.isActive && 
+      approvedApplications[property.propertyId] &&
+      property.totalNumberOfTokens === 0 // Only show properties where all tokens are sold
   );
 
   const handleRent = async (propertyId: number) => {
@@ -111,10 +140,80 @@ export default function RentPage() {
         )}
       </div>
 
+      {/* Approved Applications Section */}
+      {approvedProperties.length > 0 && (
+        <div className="mb-12">
+          <h2 className="text-2xl font-bold mb-6">Your Approved Applications</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {approvedProperties.map((property) => (
+              <Card key={property.propertyId} className="overflow-hidden border-green-500/30">
+                <div className="relative h-48">
+                  <img
+                    src={property.imageURI}
+                    alt={property.name}
+                    className="w-full h-full object-cover"
+                  />
+                  <Badge className="absolute top-4 right-4 bg-green-500 hover:bg-green-600">
+                    Approved Application
+                  </Badge>
+                </div>
+                <CardHeader>
+                  <CardTitle>{property.name}</CardTitle>
+                  <CardDescription>{property.location}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-500 mb-4">{property.description}</p>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center bg-gradient-to-r from-primary/10 to-primary/5 p-3 rounded-lg">
+                      <span className="text-sm font-medium text-primary">Monthly Rent</span>
+                      <span className="text-sm font-mono font-medium">
+                        {Number(formatEther(property.monthlyRent)).toFixed(2)} ETH
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center bg-gradient-to-r from-secondary/10 to-secondary/5 p-3 rounded-lg">
+                      <span className="text-sm font-medium text-white">Total Property Value</span>
+                      <span className="text-sm font-mono font-medium text-white">
+                        {Number(formatEther(property.totalCost)).toFixed(2)} ETH
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="flex flex-col gap-4">
+                  <div className="w-full p-3 bg-primary/10 rounded-lg text-center">
+                    <p className="text-xs text-primary/80 mb-1">Security Deposit Required</p>
+                    <p className="text-sm font-semibold">1 Month's Rent</p>
+                  </div>
+                  <Button
+                    className="w-full bg-green-600 hover:bg-green-700"
+                    onClick={() => handleRent(property.propertyId)}
+                    disabled={!isConnected || renting === property.propertyId}
+                  >
+                    {renting === property.propertyId ? (
+                      <span className="flex items-center gap-2">
+                        <span className="animate-spin">⚡</span> 
+                        Processing...
+                      </span>
+                    ) : (
+                      "Rent Property Now"
+                    )}
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Available Properties Section */}
+      <h2 className="text-2xl font-bold mb-6">Available Properties</h2>
       {availableProperties.length === 0 ? (
         <div className="text-center py-12">
           <h2 className="text-xl font-semibold mb-2">No Properties Available for Rent</h2>
-          <p className="text-gray-500">Check back later for new rental opportunities.</p>
+          <p className="text-gray-500">
+            {properties.some(p => p.isRentable && p.isActive && p.totalNumberOfTokens > 0) 
+              ? "Properties are still being tokenized. Please wait until all tokens are sold."
+              : "Check back later for new rental opportunities."}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
